@@ -25,10 +25,10 @@ class RspecCompactDocFormatter < RSpec::Core::Formatters::BaseTextFormatter
 
     if @group_level == 0
       output_class_name description
-    elsif method_name?(description)
+    elsif method_name? description
       output_prelude_and_method description
     elsif @method_position and @group_level > @method_position
-      nil
+      output_fixture description
     else
       @prelude += description + ' '
     end
@@ -73,9 +73,9 @@ class RspecCompactDocFormatter < RSpec::Core::Formatters::BaseTextFormatter
 
     if example_group
       example_group.ancestors.reverse.each_with_index do |a, i|
-        if i <= @method_position
+        if i <= @start_position
           nil
-        elsif i != @method_position + 1 and a.description[0,4] == 'when'
+        elsif i != @start_position + 1 and a.description[0,4] == 'when'
           content[:assertion] << ", #{a.description}"
         elsif not ['and', 'having', 'when', 'with', 'without'].include? a.description.split(' ')[0] and (i+1) == example_group.ancestors.length
           content[:subject] = a.description
@@ -90,12 +90,20 @@ class RspecCompactDocFormatter < RSpec::Core::Formatters::BaseTextFormatter
 
     content[:result] = example.description.to_s.empty? ? 'FAILED' : example.description
 
-    return (@method_position == 1 ? '    ' : '      ') + content[:assertion].join + content[:subject] + self.send(color, content[:result])
+    return (@start_position == 1 ? '    ' : '      ') + content[:assertion].join + content[:subject] + self.send(color, content[:result])
   end
 
   def output_class_name(description)
     output.puts "\n" + description
     @prelude = ''
+  end
+
+  def output_fixture(description)
+    if description.include? 'with the fixture'
+      @start_position += 1
+
+      output.puts current_indentation + description.split(':')[0] + "\e[1;33m" + description.split(':')[1] + "\e[0m"
+    end
   end
 
   def output_prelude_and_method(description)
@@ -117,6 +125,7 @@ class RspecCompactDocFormatter < RSpec::Core::Formatters::BaseTextFormatter
     output.puts indent_method + cyan(description)
 
     @method_position = @group_level
+    @start_position = @method_position
   end
 
   def passed_output(example)
@@ -124,7 +133,7 @@ class RspecCompactDocFormatter < RSpec::Core::Formatters::BaseTextFormatter
   end
 
   def pending_output(example, message)
-    indent = (@method_position and @method_position > 1) ? '      ' : '    '
+    indent = (@start_position and @start_position > 1) ? '      ' : '    '
     yellow("#{indent}#{example.description} (PENDING: #{message})")
   end
 end
